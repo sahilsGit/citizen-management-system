@@ -1,3 +1,4 @@
 .env
 .vscode
 /api/cmd/main/main
+/node_modules
