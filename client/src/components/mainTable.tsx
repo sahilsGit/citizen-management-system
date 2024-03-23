@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import AddCitizen from "./addCitizen";
 import EditCitizen from "./editCitizen";
 import SearchCitizen from "./searchCitizen";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 
 // Interface
 export interface Citizen {
@@ -39,6 +39,7 @@ export function MainTable() {
   const [status, setStatus] = useState("main"); // To differentiate between main & search state
   const [currentIndex, setCurrentIndex] = useState(0); // For pagination
   const [hasReachedEnd, setHasReachedEnd] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [queryState, setQueryState] = useState<QuerySchema>({
     query: "",
@@ -148,7 +149,10 @@ export function MainTable() {
      * is there to prevent react strict mode issues
      */
     if (mainData.length === 0) {
-      fetchMore();
+      (async () => {
+        await fetchMore();
+        setIsLoading(false);
+      })();
     }
   }, []);
 
@@ -180,7 +184,7 @@ export function MainTable() {
     if (status === "search") {
       fetchMoreSearch();
     }
-  }, [status]);
+  }, [status, queryState]);
 
   const handleNextClick = () => {
     if (currentIndex + rowsPerPage >= mainData.length) {
@@ -214,6 +218,14 @@ export function MainTable() {
 
     currentIndex !== 0 && setHasReachedEnd(false);
   };
+
+  if (isLoading) {
+    return (
+      <div className="w-screen h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full pt-2">
