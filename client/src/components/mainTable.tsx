@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import AddCitizen from "./addCitizen";
 import EditCitizen from "./editCitizen";
 import SearchCitizen from "./searchCitizen";
-import { Loader2, Trash2 } from "lucide-react";
+import { Divide, Loader2, Trash2 } from "lucide-react";
 
 // Interface
 export interface Citizen {
@@ -40,6 +40,7 @@ export function MainTable() {
   const [currentIndex, setCurrentIndex] = useState(0); // For pagination
   const [hasReachedEnd, setHasReachedEnd] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [beingFetched, setBeingFetch] = useState(false);
 
   const [queryState, setQueryState] = useState<QuerySchema>({
     query: "",
@@ -150,8 +151,10 @@ export function MainTable() {
      */
     if (mainData.length === 0) {
       (async () => {
+        setBeingFetch(true);
         await fetchMore();
         setIsLoading(false);
+        setBeingFetch(false);
       })();
     }
   }, []);
@@ -182,7 +185,11 @@ export function MainTable() {
   useEffect(() => {
     // Listen to status changes, and fetch when status is search
     if (status === "search") {
-      fetchMoreSearch();
+      (async () => {
+        setBeingFetch(true);
+        await fetchMoreSearch();
+        setBeingFetch(false);
+      })();
     }
   }, [status, queryState]);
 
@@ -296,8 +303,15 @@ export function MainTable() {
           }
         </TableBody>
       </Table>
-      <div className="flex flex-col items-center mt-2">
-        {!mainData.length && <div>No data found!</div>}
+      <div className="flex flex-col items-center mt-2 grow">
+        {!mainData.length &&
+          (!beingFetched ? (
+            <div>No data found!</div>
+          ) : (
+            <div>
+              <Loader2 className="animate-spin" />
+            </div>
+          ))}
         <div className="mt-2 flex w-full justify-center px-4 space-x-4">
           <Button
             variant="outline"
