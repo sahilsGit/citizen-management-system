@@ -19,23 +19,13 @@ const querySchema = z.object({
 });
 
 interface SearchCitizenProps {
-  totalFetched: number;
-  setMainData: any;
-  mainData: any;
-  setCurrentIndex: any;
-  purgeMainData: any;
+  querySetter: any;
 }
 
 const SearchCitizen = ({
-  totalFetched,
-  setMainData,
-  mainData,
-  setCurrentIndex,
-  purgeMainData,
+  querySetter,
 }: //   setStatus,
 SearchCitizenProps) => {
-  const baseurl = import.meta.env.VITE_BASE_URL;
-
   // Search form
   const form = useForm<z.infer<typeof querySchema>>({
     resolver: zodResolver(querySchema),
@@ -45,47 +35,8 @@ SearchCitizenProps) => {
     },
   });
 
-  const fetchMore = async (dAttribute?: string, dQuery?: string) => {
-    // Fetch more search rows
-    try {
-      const response = await fetch(
-        `${baseurl}/citizens?skip=${
-          totalFetched || 0
-        }&limit=1000&${dAttribute}=${dQuery}`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!data) {
-        return;
-      }
-
-      setMainData(data);
-
-      /**
-       * Whenever a search query is made the mainData in the parent is purged,
-       * this is done to avoid memory leaks, so if the mainData.length is a truthy
-       * values here, this means the mainData holds search results not the main results,
-       * so we can with no worries take it as our true search index
-       */
-      if (mainData.length) {
-        setCurrentIndex(mainData.length);
-      }
-    } catch (error: any) {
-      console.log(error.message);
-    }
-  };
-
   const onSubmit = async (data: z.infer<typeof querySchema>) => {
-    // Purging the parent component's results, to prevent memory leak
-    purgeMainData();
-
-    // Fetch search results
-    await fetchMore(data.attribute, data.query);
+    querySetter({ query: data.query, attribute: data.attribute });
   };
 
   return (

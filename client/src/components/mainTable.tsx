@@ -26,6 +26,11 @@ export interface Citizen {
   pincode: number;
 }
 
+interface QuerySchema {
+  query: string;
+  attribute: string;
+}
+
 // Main Table logic
 export function MainTable() {
   const baseurl = import.meta.env.VITE_BASE_URL; // Remote url
@@ -33,30 +38,28 @@ export function MainTable() {
   const rowsPerPage = 7; // Max rows per page
   const [status, setStatus] = useState("main"); // To differentiate between main & search state
   const [currentIndex, setCurrentIndex] = useState(0); // For pagination
+  const [hasReachedEnd, setHasReachedEnd] = useState(false);
+
+  const [queryState, setQueryState] = useState<QuerySchema>({
+    query: "",
+    attribute: "",
+  });
 
   /**
    * Setters for children component
    *
    * This is the component that handles the pagination logic, no additional pagination
    * logic is handled in the search component, so all the search results are to be
-   * sent to this component for pagination, so these setters are needed for child to
-   * change the state of parent component
+   * sent to this component for being fetched & pagination, so this setter is needed for child to
+   * change the state of the parent component
    */
 
-  // Overrides the parent current index with child's index
-  const changeCurrentIndex = (index: number) => {
-    setCurrentIndex(index);
-  };
-
-  // Purges the mainData to make space for children's search data
-  const purgeMainData = () => {
+  const querySetter = ({ query, attribute }: QuerySchema) => {
+    setQueryState({ query, attribute });
     setMainData([]);
-  };
-
-  // Overrides the parent's main data and takes over it
-  const changeMainData = (data: any) => {
-    setMainData(data);
     setStatus("search");
+    setCurrentIndex(0);
+    setHasReachedEnd(false);
   };
 
   // Fetches more rows, takes the skip value which is the number of rows already fetched
@@ -72,17 +75,60 @@ export function MainTable() {
 
       const data = await response.json();
 
-      // A null data means no more rows to fetch so return without setting and updating current search index
-
+      // A null data means no more rows to fetch, so return without setting and updating current search index
       if (!data) {
+        setHasReachedEnd(true);
         return;
       }
+
+      // If payload ever contains results less then rows per page this means we have reached the end
+      data.length < rowsPerPage && setHasReachedEnd(true);
 
       // Set main data - add more rows
       setMainData((prev) => [...prev, ...data]);
 
       /*
-       * Existence of mainData.length means we are not fetching
+       * mainData.length being a truthy value means we are not fetching
+       * for the first time but bringing in another batch, so we can set
+       * index to mainData.length, so that new rows
+       * brought in can be sliced and shown
+       */
+      if (mainData.length) {
+        setCurrentIndex(mainData.length);
+      }
+    } catch (error: any) {
+      // Not handling errors for now
+      console.log(error.message);
+    }
+  };
+
+  // Same as fetch more but fetches with search query enabled
+  const fetchMoreSearch = async () => {
+    try {
+      const response = await fetch(
+        `${baseurl}/citizens?skip=${mainData.length}&limit=100&${queryState.attribute}=${queryState.query}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      const data = await response.json();
+
+      // A null data means no more rows to fetch, so return without setting and updating current search index
+      if (!data) {
+        setHasReachedEnd(true);
+        return;
+      }
+
+      // If payload ever contains results less then rows per page this means we have reached the end
+      data.length < rowsPerPage && setHasReachedEnd(true);
+
+      // Set main data - add more rows
+      setMainData((prev) => [...prev, ...data]);
+
+      /*
+       * mainData.length being a truthy value means we are not fetching
        * for the first time but bringing in another batch, so we can set
        * index to mainData.length, so that new rows
        * brought in can be sliced and shown
@@ -97,7 +143,7 @@ export function MainTable() {
   };
 
   useEffect(() => {
-    /**
+    /*
      * Runs on initial page load, a conditional check
      * is there to prevent react strict mode issues
      */
@@ -122,24 +168,36 @@ export function MainTable() {
     }
   };
 
-  /**
-   * Handles next click logic, this next
-   * click works for both mainComponent (this component)
-   * and the search component (children component) - based on status
+  /*
+   * Handles next click logic, this next button
+   * works for both mainComponent (this component)
+   * and the search component (children component) - based on status state variable
    *
    */
 
+  useEffect(() => {
+    // Listen to status changes, and fetch when status is search
+    if (status === "search") {
+      fetchMoreSearch();
+    }
+  }, [status]);
+
   const handleNextClick = () => {
     if (currentIndex + rowsPerPage >= mainData.length) {
-      /**
-       * Fetch more, currentIndex + rowsPerPage equals to mainData.length
+      /*
+       * Fetch mores, currentIndex + rowsPerPage equals to mainData.length
        * means that no more rows to show, so the previous payload
        * has been exhausted, time to fetch another batch
        *
        */
 
-      //
-      fetchMore();
+      if (queryState.attribute && queryState.query) {
+        // If query attributes are present fetch more search results
+        fetchMoreSearch();
+      } else {
+        // Else fetch more normal results
+        fetchMore();
+      }
     } else {
       // Else move the index and show another page
       setCurrentIndex((prev) =>
@@ -148,24 +206,20 @@ export function MainTable() {
     }
   };
 
-  // State forward previous page logic, just decrease the index
+  // Show previous page logic, just decrease the index
   const handlePreviousClick = () => {
     setCurrentIndex((prev) =>
       prev - rowsPerPage >= 0 ? prev - rowsPerPage : prev
     );
+
+    currentIndex !== 0 && setHasReachedEnd(false);
   };
 
   return (
     <div className="w-full pt-2">
       <div className="flex justify-between space-x-8 pt-4 px-4">
         <AddCitizen />
-        <SearchCitizen
-          totalFetched={status === "main" ? 0 : mainData.length}
-          setMainData={changeMainData}
-          mainData={status === "main" ? [] : mainData}
-          setCurrentIndex={changeCurrentIndex}
-          purgeMainData={purgeMainData}
-        />
+        <SearchCitizen querySetter={querySetter} />
       </div>
       <Table className="mt-5">
         <TableHeader>
@@ -243,10 +297,7 @@ export function MainTable() {
           </Button>
           <Button
             variant="outline"
-            disabled={
-              currentIndex + 2 > mainData.length ||
-              mainData.length < rowsPerPage
-            }
+            disabled={hasReachedEnd === true}
             size="sm"
             onClick={handleNextClick}
           >
